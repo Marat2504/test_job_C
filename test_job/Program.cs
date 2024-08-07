@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using System.IO.Compression;
 using System.Xml;
 using System.Text.RegularExpressions;
+using System.Diagnostics;
 
 
 class Program
@@ -11,14 +12,16 @@ class Program
     static async Task Main(string[] args)
     {
         string url = "https://fias.nalog.ru/WebServices/Public/GetLastDownloadFileInfo";
-        Archive archive = new Archive();
+        string rootFolderName = "gar_delta_xml";
+        Archive archive = new Archive(rootFolderName);
 
         await archive.GetJson(url);
         if (archive.DictionaryResponse != null && archive.DictionaryResponse.ContainsKey("GarXMLDeltaURL"))
         {
-            await archive.GetFile(archive.DictionaryResponse["GarXMLDeltaURL"].ToString());
             
-            archive.ExtractArchive();
+            await archive.GetFile(archive.DictionaryResponse["GarXMLDeltaURL"].ToString(), "gar_delta_xml.zip");
+            
+            archive.ExtractArchive("gar_delta_xml.zip");
 
             archive.ReadXmlFile();
 
@@ -60,8 +63,14 @@ class Program
 
     class Archive
     {
-        public Dictionary<string, object> DictionaryResponse { get; set; }
-        private string baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
+        private string BaseDirectory = AppDomain.CurrentDomain.BaseDirectory;
+        public Dictionary<string, object> DictionaryResponse;
+        public string RootFolderName = "gar_delta_xml";
+
+        public Archive(string rootFolderName)
+        {
+            RootFolderName = rootFolderName;
+        }
 
         //получение json
         public async Task GetJson(string url)
@@ -87,15 +96,13 @@ class Program
         }
 
         //скачать файл
-        public async Task GetFile(string url)
+        public async Task GetFile(string url, string outPutPath)
         {
-            string outputPath = "gar_delta_xml.zip";
-
-            if (File.Exists(outputPath)) 
+            if (File.Exists(outPutPath)) 
             {
                 try
                 {
-                    File.Delete(outputPath);
+                    File.Delete(outPutPath);
                 }
                 catch (Exception e) 
                 {
@@ -111,7 +118,7 @@ class Program
                     Console.WriteLine("Пакет изменений скачивается ...");
                     HttpResponseMessage response = await client.GetAsync(url);
                     response.EnsureSuccessStatusCode();
-                    using (var filestream = new FileStream(outputPath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None))
+                    using (var filestream = new FileStream(outPutPath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None))
                     {
 
                         await response.Content.CopyToAsync(filestream);
@@ -127,10 +134,10 @@ class Program
         }
 
         //разархивировать файл
-        public void ExtractArchive()
+        public void ExtractArchive(string nameZipFile)
         {
-            string zipPath = Path.Combine(baseDirectory, "gar_delta_xml.zip");
-            string extractPath = Path.Combine(baseDirectory, "gar_delta_xml");
+            string zipPath = Path.Combine(BaseDirectory, nameZipFile);
+            string extractPath = Path.Combine(BaseDirectory, RootFolderName);
             try
             {
                 Console.WriteLine("Распаковка архива ...");
@@ -158,7 +165,7 @@ class Program
         //получить нужные level
         public List<Dictionary<string, string>> ReadXmlFile()
         {
-            string directoryPath = Path.Combine(baseDirectory, "gar_delta_xml");
+            string directoryPath = Path.Combine(BaseDirectory, RootFolderName);
             List<string> targetNames = new List<string>
         {
             "помещение",
@@ -206,9 +213,8 @@ class Program
         {
             Queue<string> directoryPathsFromXmlFiles = new Queue<string>();
             try
-            {
-                string baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
-                string directoryPath = Path.Combine(baseDirectory, "gar_delta_xml");
+            {                
+                string directoryPath = Path.Combine(BaseDirectory, RootFolderName);
 
                 string[] directories = Directory.GetDirectories(directoryPath);
                 foreach (string directory in directories)
@@ -263,7 +269,7 @@ class Program
         //получить версию базы
         public string GetVersionBase()
         {
-            string directoryPath = Path.Combine(baseDirectory, "gar_delta_xml");
+            string directoryPath = Path.Combine(BaseDirectory, RootFolderName);
             string date = @"\d{4}\.\d{2}\.\d{2}";
             try
             {
@@ -340,6 +346,8 @@ class Program
 
             File.WriteAllText("report.html", html);
             Console.WriteLine("Отчет создан!");
+
+            Process.Start(new ProcessStartInfo("report.html") { UseShellExecute = true });
         }
 
     }
